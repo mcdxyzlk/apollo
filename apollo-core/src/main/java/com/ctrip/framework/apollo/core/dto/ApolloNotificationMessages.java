@@ -25,6 +25,13 @@ import java.util.Map;
  * @author Jason Song(song_s@ctrip.com)
  */
 public class ApolloNotificationMessages {
+   /**
+     * 明细 Map
+     *
+     * KEY ：{appId} "+" {clusterName} "+" {namespace} ，例如：100004458+default+application
+     * VALUE ：通知编号
+     * 当namespaceName 对应的 Namespace 是关联类型时，会同时查询当前 Namespace + 关联的 Namespace 这两个 Namespace，所以会是多个，使用 Map 数据结构
+     */
   private Map<String, Long> details;
 
   public ApolloNotificationMessages() {

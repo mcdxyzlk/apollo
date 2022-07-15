@@ -70,6 +70,10 @@ import java.util.function.Function;
 @RequestMapping("/notifications/v2")
 public class NotificationControllerV2 implements ReleaseMessageListener {
   private static final Logger logger = LoggerFactory.getLogger(NotificationControllerV2.class);
+  /**
+   *  Watch Key与DeferredResultWrapper的Multimap
+   *  Watch Key等价于ReleaseMessage的通知内容message字段,appId+cluster+namespace
+   */
   private final Multimap<String, DeferredResultWrapper> deferredResults =
       Multimaps.synchronizedSetMultimap(TreeMultimap.create(String.CASE_INSENSITIVE_ORDER, Ordering.natural()));
   private static final Splitter STRING_SPLITTER =
@@ -112,9 +116,11 @@ public class NotificationControllerV2 implements ReleaseMessageListener {
       @RequestParam(value = "notifications") String notificationsAsString,
       @RequestParam(value = "dataCenter", required = false) String dataCenter,
       @RequestParam(value = "ip", required = false) String clientIp) {
+
     List<ApolloConfigNotification> notifications = null;
 
     try {
+      // 解析 notificationsAsString 参数，创建 ApolloConfigNotification 数组。
       notifications =
           gson.fromJson(notificationsAsString, notificationsTypeReference);
     } catch (Throwable ex) {
@@ -124,30 +130,35 @@ public class NotificationControllerV2 implements ReleaseMessageListener {
     if (CollectionUtils.isEmpty(notifications)) {
       throw new BadRequestException("Invalid format of notifications: " + notificationsAsString);
     }
-    
+     // 过滤并创建 ApolloConfigNotification Map
     Map<String, ApolloConfigNotification> filteredNotifications = filterNotifications(appId, notifications);
 
     if (CollectionUtils.isEmpty(filteredNotifications)) {
       throw new BadRequestException("Invalid format of notifications: " + notificationsAsString);
     }
-    
+     // 创建 DeferredResultWrapper 对象 超时时间60s
     DeferredResultWrapper deferredResultWrapper = new DeferredResultWrapper(bizConfig.longPollingTimeoutInMilli());
+     //Namespace集合
     Set<String> namespaces = Sets.newHashSetWithExpectedSize(filteredNotifications.size());
+     // 客户端的通知 Map 。key 为 Namespace 名，,value为通知编号(ReleaseMessage.id)
     Map<String, Long> clientSideNotifications = Maps.newHashMapWithExpectedSize(filteredNotifications.size());
-    
+    // 循环 ApolloConfigNotification Map ，初始化上述变量。
     for (Map.Entry<String, ApolloConfigNotification> notificationEntry : filteredNotifications.entrySet()) {
       String normalizedNamespace = notificationEntry.getKey();
       ApolloConfigNotification notification = notificationEntry.getValue();
+       // 添加到 `namespaces` 中。
       namespaces.add(normalizedNamespace);
+       //添加到clientSideNotifications中
       clientSideNotifications.put(normalizedNamespace, notification.getNotificationId());
+      // 记录名字被归一化的 Namespace 。因为，最终返回给客户端，使用原始的 Namespace 名字，否则客户端无法识别。
       if (!Objects.equals(notification.getNamespaceName(), normalizedNamespace)) {
         deferredResultWrapper.recordNamespaceNameNormalizedResult(notification.getNamespaceName(), normalizedNamespace);
       }
     }
-
+   // 组装 Watch Key Multimap
     Multimap<String, String> watchedKeysMap =
         watchKeysUtil.assembleAllWatchKeys(appId, cluster, namespaces, dataCenter);
-
+    // 生成 Watch Key 集合
     Set<String> watchedKeys = Sets.newHashSet(watchedKeysMap.values());
 
     /**
@@ -155,11 +166,13 @@ public class NotificationControllerV2 implements ReleaseMessageListener {
      * If the check before setting deferredResult,it may receive a notification the next time
      * when method handleMessage is executed between check and set deferredResult.
      */
+     // 注册超时事件
     deferredResultWrapper
           .onTimeout(() -> logWatchedKeys(watchedKeys, "Apollo.LongPoll.TimeOutKeys"));
-
+     // 注册结束事件
     deferredResultWrapper.onCompletion(() -> {
       //unregister all keys
+      // 移除 Watch Key + DeferredResultWrapper 出 `deferredResults`
       for (String key : watchedKeys) {
         deferredResults.remove(key, deferredResultWrapper);
       }
@@ -167,6 +180,7 @@ public class NotificationControllerV2 implements ReleaseMessageListener {
     });
 
     //register all keys
+    // 注册 Watch Key + DeferredResultWrapper 到 `deferredResults` 中，等待配置发生变化后通知。
     for (String key : watchedKeys) {
       this.deferredResults.put(key, deferredResultWrapper);
     }
@@ -178,6 +192,7 @@ public class NotificationControllerV2 implements ReleaseMessageListener {
     /**
      * 2、check new release
      */
+     // 获得 Watch Key 集合中，每个 Watch Key 对应的 ReleaseMessage 记录。这里是从Config Service本地Cache中获取的 >> 在handleMessage中设置的缓存
     List<ReleaseMessage> latestReleaseMessages =
         releaseMessageService.findLatestReleaseMessagesGroupByMessages(watchedKeys);
 
@@ -187,12 +202,24 @@ public class NotificationControllerV2 implements ReleaseMessageListener {
      * which is unacceptable since we are doing long polling - means the db connection would be hold
      * for a very long time
      */
+    /**
+     * 手动关闭EntityManager
+     * 因为对于async请求,Spring在请求完成之前不会这样做
+     * 这是不可接受的,因为我们正在做长轮询——意味着db连接将被保留很长时间
+     * 实际上,下面的过程,我们已经不需要db连接,因此进行关闭
+     */
     entityManagerUtil.closeEntityManager();
-
+    /**
+     * 获得新的 ApolloConfigNotification 通知数组  >>
+     * 因为一个客户端可以订阅多个Namespace，所以该参数是List。该接口返回的结果也是List<ApolloConfigNotification> ，
+     * 仅返回配置发生变化的Namespace对应的ApolloConfigNotification。
+     * 也就说，当有几个配置发生变化的 Namespace ，返回几个对应的 ApolloConfigNotification 。
+     * 另外，客户端接收到返回后，会增量合并到本地的配置通知信息。客户端下次请求时，使用合并后的配置通知信息。
+     */
     List<ApolloConfigNotification> newNotifications =
         getApolloConfigNotifications(namespaces, clientSideNotifications, watchedKeysMap,
             latestReleaseMessages);
-
+    // 若有新的通知，直接设置结果。
     if (!CollectionUtils.isEmpty(newNotifications)) {
       deferredResultWrapper.setResult(newNotifications);
     }
@@ -230,17 +257,21 @@ public class NotificationControllerV2 implements ReleaseMessageListener {
                                                                       Map<String, Long> clientSideNotifications,
                                                                       Multimap<String, String> watchedKeysMap,
                                                                       List<ReleaseMessage> latestReleaseMessages) {
+    //  创建 ApolloConfigNotification 数组
     List<ApolloConfigNotification> newNotifications = Lists.newArrayList();
     if (!CollectionUtils.isEmpty(latestReleaseMessages)) {
+      // 创建最新通知的 Map 。其中 Key 为 Watch Key 。
       Map<String, Long> latestNotifications = Maps.newHashMap();
       for (ReleaseMessage releaseMessage : latestReleaseMessages) {
         latestNotifications.put(releaseMessage.getMessage(), releaseMessage.getId());
       }
-
+      // 循环 Namespace 的名字的集合，判断是否有配置更新
       for (String namespace : namespaces) {
         long clientSideId = clientSideNotifications.get(namespace);
         long latestId = ConfigConsts.NOTIFICATION_ID_PLACEHOLDER;
+        // 获得 Namespace 对应的 Watch Key 集合
         Collection<String> namespaceWatchedKeys = watchedKeysMap.get(namespace);
+        // 获得最大的通知编号
         for (String namespaceWatchedKey : namespaceWatchedKeys) {
           long namespaceNotificationId =
               latestNotifications.getOrDefault(namespaceWatchedKey, ConfigConsts.NOTIFICATION_ID_PLACEHOLDER);
@@ -248,10 +279,14 @@ public class NotificationControllerV2 implements ReleaseMessageListener {
             latestId = namespaceNotificationId;
           }
         }
+        // 若服务器的通知编号大于客户端的通知编号，意味着有配置更新
         if (latestId > clientSideId) {
+          // 创建 ApolloConfigNotification 对象
           ApolloConfigNotification notification = new ApolloConfigNotification(namespace, latestId);
+          //// 循环添加通知编号到 ApolloConfigNotification 中。
           namespaceWatchedKeys.stream().filter(latestNotifications::containsKey).forEach(namespaceWatchedKey ->
               notification.addMessage(namespaceWatchedKey, latestNotifications.get(namespaceWatchedKey)));
+              // 添加 ApolloConfigNotification 对象到结果
           newNotifications.add(notification);
         }
       }
@@ -259,39 +294,47 @@ public class NotificationControllerV2 implements ReleaseMessageListener {
     return newNotifications;
   }
 
+  /**
+   * 当有新的 ReleaseMessage 时，通知其对应的 Namespace 的，并且正在等待的请求
+   */
   @Override
   public void handleMessage(ReleaseMessage message, String channel) {
     logger.info("message received - channel: {}, message: {}", channel, message);
 
     String content = message.getMessage();
     Tracer.logEvent("Apollo.LongPoll.Messages", content);
+    // 仅处理 APOLLO_RELEASE_TOPIC
     if (!Topics.APOLLO_RELEASE_TOPIC.equals(channel) || Strings.isNullOrEmpty(content)) {
       return;
     }
-
+    // 获得对应的 Namespace 的名字
     String changedNamespace = retrieveNamespaceFromReleaseMessage.apply(content);
 
     if (Strings.isNullOrEmpty(changedNamespace)) {
       logger.error("message format invalid - {}", content);
       return;
     }
-
+    // `deferredResults` 存在对应的 Watch Key
     if (!deferredResults.containsKey(content)) {
       return;
     }
 
     //create a new list to avoid ConcurrentModificationException
+    // 创建 DeferredResultWrapper 数组，避免并发问题。
     List<DeferredResultWrapper> results = Lists.newArrayList(deferredResults.get(content));
-
+    // 创建 ApolloConfigNotification 对象
     ApolloConfigNotification configNotification = new ApolloConfigNotification(changedNamespace, message.getId());
+    //添加通知消息明细
     configNotification.addMessage(content, message.getId());
 
     //do async notification if too many clients
+    // 若需要通知的客户端过多，使用 ExecutorService 异步通知，避免“惊群效应”
     if (results.size() > bizConfig.releaseMessageNotificationBatch()) {
       largeNotificationBatchExecutorService.submit(() -> {
         logger.debug("Async notify {} clients for key {} with batch {}", results.size(), content,
             bizConfig.releaseMessageNotificationBatch());
         for (int i = 0; i < results.size(); i++) {
+           // 每 N 个客户端，sleep 一段时间。
           if (i > 0 && i % bizConfig.releaseMessageNotificationBatch() == 0) {
             try {
               TimeUnit.MILLISECONDS.sleep(bizConfig.releaseMessageNotificationBatchIntervalInMilli());
@@ -300,6 +343,7 @@ public class NotificationControllerV2 implements ReleaseMessageListener {
             }
           }
           logger.debug("Async notify {}", results.get(i));
+          // 设置结果
           results.get(i).setResult(configNotification);
         }
       });
@@ -307,13 +351,16 @@ public class NotificationControllerV2 implements ReleaseMessageListener {
     }
 
     logger.debug("Notify {} clients for key {}", results.size(), content);
-
+    // 设置结果
     for (DeferredResultWrapper result : results) {
       result.setResult(configNotification);
     }
     logger.debug("Notification completed");
   }
 
+  /**
+   * 通过ReleaseMessage的消息内容,获得对应namespace的名字 拆分appId+cluster+namespace拿到namespace
+   */
   private static final Function<String, String> retrieveNamespaceFromReleaseMessage =
       releaseMessage -> {
         if (Strings.isNullOrEmpty(releaseMessage)) {

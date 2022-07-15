@@ -26,6 +26,7 @@ public class ReleaseMessageKeyGenerator {
   private static final Joiner STRING_JOINER = Joiner.on(ConfigConsts.CLUSTER_NAMESPACE_SEPARATOR);
 
   public static String generate(String appId, String cluster, String namespace) {
+    //将appId+cluster+namespace拼接,使用+作为间隔
     return STRING_JOINER.join(appId, cluster, namespace);
   }
 }

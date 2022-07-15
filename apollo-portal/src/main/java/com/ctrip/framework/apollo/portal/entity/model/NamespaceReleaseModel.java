@@ -21,14 +21,37 @@ import com.ctrip.framework.apollo.portal.environment.Env;
 import com.ctrip.framework.apollo.core.utils.StringUtils;
 
 public class NamespaceReleaseModel implements Verifiable {
-
+  /**
+   * app编号
+   */
   private String appId;
+  /**
+   * env名称
+   */
   private String env;
+  /**
+   * cluster名称
+   */
   private String clusterName;
+   /**
+   * namespace名称
+   */
   private String namespaceName;
+  /**
+   * 发布标题
+   */
   private String releaseTitle;
+   /**
+   * 发布描述
+   */
   private String releaseComment;
+  /**
+   * 发布人
+   */
   private String releasedBy;
+  /**
+   * 是否紧急发布
+   */
   private boolean isEmergencyPublish;
 
   @Override

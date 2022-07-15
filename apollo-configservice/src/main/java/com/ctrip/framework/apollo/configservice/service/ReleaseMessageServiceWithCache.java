@@ -102,6 +102,7 @@ public class ReleaseMessageServiceWithCache implements ReleaseMessageListener, I
     List<ReleaseMessage> releaseMessages = Lists.newArrayList();
 
     for (String message : messages) {
+      // Config Service本地Cache中获取的  >> handleMessage  缓存set值
       ReleaseMessage releaseMessage = releaseMessageCache.get(message);
       if (releaseMessage != null) {
         releaseMessages.add(releaseMessage);
@@ -124,6 +125,7 @@ public class ReleaseMessageServiceWithCache implements ReleaseMessageListener, I
     }
 
     long gap = message.getId() - maxIdScanned;
+    // 设置缓存值
     if (gap == 1) {
       mergeReleaseMessage(message);
     } else if (gap > 1) {

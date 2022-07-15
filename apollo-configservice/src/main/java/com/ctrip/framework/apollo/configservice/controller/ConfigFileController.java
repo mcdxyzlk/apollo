@@ -179,8 +179,8 @@ public class ConfigFileController implements ReleaseMessageListener {
     boolean hasGrayReleaseRule = grayReleaseRulesHolder.hasGrayReleaseRule(appId, clientIp,
         namespace);
 
-    String cacheKey = assembleCacheKey(outputFormat, appId, clusterName, namespace, dataCenter);
 
+    String cacheKey = assembleCacheKey(outputFormat, appId, clusterName, namespace, dataCenter);
     //2. try to load gray release and return
     if (hasGrayReleaseRule) {
       Tracer.logEvent("ConfigFile.Cache.GrayRelease", cacheKey);

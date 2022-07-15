@@ -123,6 +123,7 @@ public class ReleaseController {
                             @RequestParam(name = "comment", required = false) String releaseComment,
                             @RequestParam("operator") String operator,
                             @RequestParam(name = "isEmergencyPublish", defaultValue = "false") boolean isEmergencyPublish) {
+    //校验对应的Namespace是否存在
     Namespace namespace = namespaceService.findOne(appId, clusterName, namespaceName);
     if (namespace == null) {
       throw new NotFoundException("Could not find namespace for %s %s %s", appId, clusterName,
@@ -138,6 +139,7 @@ public class ReleaseController {
     } else {
       messageCluster = clusterName;
     }
+     //发送Release消息
     messageSender.sendMessage(ReleaseMessageKeyGenerator.generate(appId, messageCluster, namespaceName),
                               Topics.APOLLO_RELEASE_TOPIC);
     return BeanUtils.transform(ReleaseDTO.class, release);

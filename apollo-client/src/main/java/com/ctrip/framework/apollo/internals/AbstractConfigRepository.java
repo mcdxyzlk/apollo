@@ -33,11 +33,16 @@ import com.google.common.collect.Lists;
  */
 public abstract class AbstractConfigRepository implements ConfigRepository {
   private static final Logger logger = LoggerFactory.getLogger(AbstractConfigRepository.class);
+  /**
+   * RepositoryChangeListener数组
+   */
   private List<RepositoryChangeListener> m_listeners = Lists.newCopyOnWriteArrayList();
   protected PropertiesFactory propertiesFactory = ApolloInjector.getInstance(PropertiesFactory.class);
 
+  // 尝试同步
   protected boolean trySync() {
     try {
+      // 实际执行刷新
       sync();
       return true;
     } catch (Throwable ex) {
@@ -48,7 +53,7 @@ public abstract class AbstractConfigRepository implements ConfigRepository {
     }
     return false;
   }
-
+  // 同步配置
   protected abstract void sync();
 
   @Override
@@ -63,9 +68,12 @@ public abstract class AbstractConfigRepository implements ConfigRepository {
     m_listeners.remove(listener);
   }
 
-  protected void fireRepositoryChange(String namespace, Properties newProperties) {
+  // 触发监听器
+  protected void  fireRepositoryChange(String namespace, Properties newProperties) {
     for (RepositoryChangeListener listener : m_listeners) {
       try {
+        // 1.触发configChangeListener
+        // 2. 写本地缓存文件
         listener.onRepositoryChange(namespace, newProperties);
       } catch (Throwable ex) {
         Tracer.logError(ex);

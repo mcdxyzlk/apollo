@@ -66,7 +66,7 @@ public class ReleaseService {
     String namespaceName = model.getNamespaceName();
     String releaseBy = StringUtils.isEmpty(model.getReleasedBy()) ?
                        userInfoHolder.getUser().getUserId() : model.getReleasedBy();
-
+    //调用Admin Service API,发布Namespace的配置
     ReleaseDTO releaseDTO = releaseAPI.createRelease(appId, env, clusterName, namespaceName,
                                                      model.getReleaseTitle(), model.getReleaseComment(),
                                                      releaseBy, isEmergencyPublish);
@@ -84,7 +84,7 @@ public class ReleaseService {
     String appId = model.getAppId();
     String clusterName = model.getClusterName();
     String namespaceName = model.getNamespaceName();
-
+     //调用Admin Service API,发布Namespace的配置
     ReleaseDTO releaseDTO = releaseAPI.createGrayDeletionRelease(appId, env, clusterName, namespaceName,
             model.getReleaseTitle(), model.getReleaseComment(),
             releaseBy, isEmergencyPublish, model.getGrayDelKeys());

@@ -34,14 +34,22 @@ import javax.persistence.Table;
 @Entity
 @Table(name = "ReleaseMessage")
 public class ReleaseMessage {
+  /**
+   * id自增主键
+   */
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   @Column(name = "Id")
   private long id;
 
+   /**
+   * 消息内容,通过ReleaseMessageKeyGenerator.generate()生成,appId+cluster+namespace
+   */
   @Column(name = "Message", nullable = false)
   private String message;
-
+   /**
+   * 最后更新时间
+   */
   @Column(name = "DataChange_LastTime")
   private Date dataChangeLastModifiedTime;
 

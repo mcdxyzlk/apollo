@@ -82,7 +82,7 @@ public class ReleaseController {
     if (model.isEmergencyPublish() && !portalConfig.isEmergencyPublishAllowed(Env.valueOf(env))) {
       throw new BadRequestException(String.format("Env: %s is not supported emergency publish now", env));
     }
-
+    //发布配置
     ReleaseDTO createdRelease = releaseService.publish(model);
 
     ConfigPublishEvent event = ConfigPublishEvent.instance();

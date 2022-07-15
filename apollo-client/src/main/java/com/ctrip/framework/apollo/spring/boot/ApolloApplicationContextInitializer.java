@@ -45,9 +45,9 @@ import org.springframework.core.env.ConfigurableEnvironment;
  *
  * <p>Configuration example:</p>
  * <pre class="code">
- *   # set app.id
+ *   # set app.id   设置appid
  *   app.id = 100004458
- *   # enable apollo bootstrap config and inject 'application' namespace in bootstrap phase
+ *   # enable apollo bootstrap config and inject 'application' namespace in bootstrap phase 开启apollo配置功能，默认情况下只会读取名为application命名空间下的配置
  *   apollo.bootstrap.enabled = true
  * </pre>
  *
@@ -58,7 +58,7 @@ import org.springframework.core.env.ConfigurableEnvironment;
  *   app.id = 100004458
  *   # enable apollo bootstrap config
  *   apollo.bootstrap.enabled = true
- *   # will inject 'application' and 'FX.apollo' namespaces in bootstrap phase
+ *   # will inject 'application' and 'FX.apollo' namespaces in bootstrap phase    自定义要读取配置的命名空间
  *   apollo.bootstrap.namespaces = application,FX.apollo
  * </pre>
  *
@@ -66,7 +66,7 @@ import org.springframework.core.env.ConfigurableEnvironment;
  * If you want to load Apollo configurations even before Logging System Initialization Phase,
  *  add
  * <pre class="code">
- *   # set apollo.bootstrap.eagerLoad.enabled
+ *   # set apollo.bootstrap.eagerLoad.enabled  将apollo配置加载先于日志系统的初始化
  *   apollo.bootstrap.eagerLoad.enabled = true
  * </pre>
  *
@@ -101,6 +101,7 @@ public class ApolloApplicationContextInitializer implements
   public void initialize(ConfigurableApplicationContext context) {
     ConfigurableEnvironment environment = context.getEnvironment();
 
+    // 开启apollo功能，必须要指定apollo.bootstrap.enabled属性
     if (!environment.getProperty(PropertySourcesConstants.APOLLO_BOOTSTRAP_ENABLED, Boolean.class, false)) {
       logger.debug("Apollo bootstrap config is not enabled for context {}, see property: ${{}}", context, PropertySourcesConstants.APOLLO_BOOTSTRAP_ENABLED);
       return;
@@ -124,6 +125,7 @@ public class ApolloApplicationContextInitializer implements
       return;
     }
 
+    // 读取指定的命名空间application
     String namespaces = environment.getProperty(PropertySourcesConstants.APOLLO_BOOTSTRAP_NAMESPACES, ConfigConsts.NAMESPACE_APPLICATION);
     logger.debug("Apollo bootstrap namespaces: {}", namespaces);
     List<String> namespaceList = NAMESPACE_SPLITTER.splitToList(namespaces);
@@ -135,12 +137,14 @@ public class ApolloApplicationContextInitializer implements
     } else {
       composite = new CompositePropertySource(PropertySourcesConstants.APOLLO_BOOTSTRAP_PROPERTY_SOURCE_NAME);
     }
+    // 遍历命名空间
     for (String namespace : namespaceList) {
+      // 读取命名空间中的配置
       Config config = ConfigService.getConfig(namespace);
-
+      // 将读取到的配置组装成PropertySource
       composite.addPropertySource(configPropertySourceFactory.getConfigPropertySource(namespace, config));
     }
-
+    // 将apollo配置对应的PropertySource添加到environment    Spring配置加载：https://juejin.cn/post/6885181293374816264
     environment.getPropertySources().addFirst(composite);
   }
 

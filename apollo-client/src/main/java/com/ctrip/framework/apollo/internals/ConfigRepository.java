@@ -25,24 +25,28 @@ import java.util.Properties;
 public interface ConfigRepository {
   /**
    * Get the config from this repository.
+   * 配置读取接口
    * @return config
    */
   Properties getConfig();
 
   /**
    * Set the fallback repo for this repository.
+   * 设置上游的Repository.主要用于LocalFileConfigRepository,从Config Service读取配置,缓存在本地文件
    * @param upstreamConfigRepository the upstream repo
    */
   void setUpstreamRepository(ConfigRepository upstreamConfigRepository);
 
   /**
    * Add change listener.
+   * 添加RepositoryChangeListener
    * @param listener the listener to observe the changes
    */
   void addChangeListener(RepositoryChangeListener listener);
 
   /**
    * Remove change listener.
+   * 移除RepositoryChangeListener
    * @param listener the listener to remove
    */
   void removeChangeListener(RepositoryChangeListener listener);

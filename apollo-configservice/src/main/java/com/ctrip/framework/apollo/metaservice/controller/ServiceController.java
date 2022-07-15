@@ -48,6 +48,7 @@ public class ServiceController {
   public List<ServiceDTO> getConfigService(
       @RequestParam(value = "appId", defaultValue = "") String appId,
       @RequestParam(value = "ip", required = false) String clientIp) {
+        // 注册中心读取服务注册列表
     return discoveryService.getServiceInstances(ServiceNameConsts.APOLLO_CONFIGSERVICE);
   }
 
